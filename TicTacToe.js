@@ -1,58 +1,146 @@
-const table = document.querySelector('#app table')
+function row(number) {
+  return [3 * (number - 1) + 1, 3 * (number - 1) + 2, 3 * (number - 1) + 3];
+}
 
-let count = 0
-const winLine = [
-  // 橫列
-  [1, 2, 3],
-  [4, 5, 6],
-  [7, 8, 9],
-  // 直排
-  [1, 4, 7],
-  [2, 5, 8],
-  [3, 6, 9],
-  // 對角
+function column(number) {
+  return [number, number + 3, number + 6];
+}
+// 贏的連線種類
+const checkingLines = [
+  row(1),
+  row(2),
+  row(3),
+  column(1),
+  column(2),
+  column(3),
   [1, 5, 9],
-  [3, 5, 7]
-]
-const circleIndex = []
-const crossIndex = []
+  [3, 5, 7],
+];
+// 儲存下棋位置
+var positions = {
+  circle: [],
+  cross: [],
+};
 
-table.addEventListener('click', function onTableClicked(event) {
-  if (event.target.tagName !== 'TD') {
-    return
-  }
-  draw(event.target, count)
-  count += 1
-  isPlayerWin(circleIndex, "circle")
-  isPlayerWin(crossIndex, "cross")
-})
+var clickingThrottle = false;
+var gameoverFlag = false;
 
-function draw(cell, player) {
-  if (player % 2 === 0) {
-    cell.innerHTML = `<div class="circle"></div>`
-    recordPlayerCircle(cell)
-  } else {
-    cell.innerHTML = `<div class="cross"></div>`
-    recordPlayerCross(cell)
-  }
-}
+// 事件監聽器
+document.querySelectorAll("#app table tr td").forEach((cell) => {
+  cell.addEventListener("click", onCellClicked);
+});
+// 點擊格子動作
+function onCellClicked(event) {
+  if (clickingThrottle) return;
 
-function isPlayerWin(checkingPosittions, player) {
+  const position = Number(event.target.dataset.index);
+  if (!position) return;
 
-  winLine.forEach(line => {
-    if (line.every(position => checkingPosittions.includes(position))) {
-      alert(player + 'wins')
+  draw(position, "circle");
+  positions['circle'].push(position);
+  clickingThrottle = true;
+
+  setTimeout(() => {
+    checkWinningCondition("circle");
+
+    if (!gameoverFlag) {
+      computerMove();
     }
-  })
+  }, 500);
 }
-// 紀錄 Circle & Cross 下棋位置
-function recordPlayerCircle(cell) {
-  let chessIndex = cell.dataset.index
-  circleIndex.push(Number(chessIndex))
-  console.log(circleIndex)
+// 下棋
+function draw(position, shape) {
+  if (shape !== "circle" && shape !== "cross") {
+    return console.error(
+      "Unknown drawing shape, must be one of: circle, cross"
+    );
+  }
+
+  const cell = document.querySelector(
+    `#app table tr td[data-index='${position}']`
+  );
+  cell.innerHTML = `<div class='${shape}'></div>`;
 }
-function recordPlayerCross(cell) {
-  let chessIndex = cell.dataset.index
-  crossIndex.push(Number(chessIndex))
-  console.log(crossIndex)
+// 顯示輸贏
+function checkWinningCondition(player) {
+  const winningPlayer = isPlayerWin(positions[player], player);
+  if (winningPlayer) {
+    gameoverFlag = true;
+    removeClickListners();
+    return alert(`${winningPlayer} player won!`);
+  }
+
+  if (getEmptyPositions().length === 0) {
+    gameoverFlag = true;
+    return alert("Tied!");
+  }
+
+  clickingThrottle = false;
+}
+// 判斷輸贏
+function isPlayerWin(checkingPositions, player) {
+  // [1, 4, 2 ,3]
+
+  for (const line of checkingLines) {
+    // [1, 2, 3]
+    // [4, 5, 6]
+    if (line.every((position) => checkingPositions.includes(position))) {
+      return player;
+    }
+  }
+
+  return false;
+}
+// 電腦移動
+function computerMove() {
+  const drawingPosition = getMostValuablePosition();
+  draw(drawingPosition, "cross");
+  positions["cross"].push(drawingPosition);
+  checkWinningCondition("cross");
+}
+// 移除事件監聽器
+function removeClickListners() {
+  document.querySelectorAll("#app table tr td").forEach((cell) => {
+    cell.removeEventListener("click", onCellClicked);
+  });
+}
+// 找尋可下棋空位
+function getEmptyPositions() {
+  const allOccupiedPositions = positions["circle"].concat(positions["cross"]);
+
+  return [1, 2, 3, 4, 5, 6, 7, 8, 9].filter(
+    (position) => !allOccupiedPositions.includes(position)
+  );
+}
+
+//電腦計算最佳位置
+function getMostValuablePosition() {
+  const emptyPositions = getEmptyPositions();
+  // 防守位置
+  const defendPositions = [];
+
+  for (const hypothesisPosition of emptyPositions) {
+    const copiedCrossPositions = Array.from(positions["cross"]);
+    const copiedCirclePositions = Array.from(positions["circle"]);
+    copiedCrossPositions.push(hypothesisPosition);
+    copiedCirclePositions.push(hypothesisPosition);
+
+    // To win the game.
+    if (isPlayerWin(copiedCrossPositions, "cross")) {
+      return hypothesisPosition;
+    }
+
+    if (isPlayerWin(copiedCirclePositions, "circle")) {
+      defendPositions.push(hypothesisPosition);
+    }
+  }
+
+  if (defendPositions.length) {
+    return defendPositions[0];
+  }
+  // 如果中間是空的就下中間5
+  if (emptyPositions.includes(5)) {
+    return 5;
+  }
+  return emptyPositions[Math.floor(Math.random() * emptyPositions.length)];
 }
